@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Simple Ledger</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#111111">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; }
+    body { margin: 0; background:#f6f7f9; color:#111; }
+    header { position: sticky; top: 0; background: #fff; padding: 14px 16px; box-shadow: 0 1px 8px rgba(0,0,0,.06); z-index: 10; }
+    header h1 { font-size: 18px; margin: 0; }
+    main { padding: 14px 12px 40px; max-width: 860px; margin: 0 auto; }
+    .card { background:#fff; border-radius: 14px; padding: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.06); margin: 12px 0; }
+    .row { display:flex; gap:10px; flex-wrap: wrap; }
+    label { font-size: 12px; color:#444; display:block; margin-bottom:6px; }
+    input, select, textarea, button {
+      width: 100%; box-sizing: border-box;
+      padding: 12px; border-radius: 12px; border: 1px solid #d7dbe0; background:#fff;
+      font-size: 15px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .col { flex:1 1 160px; }
+    .btn { border: none; background:#111; color:#fff; font-weight: 650; }
+    .btn:disabled { opacity:.5; }
+    .btn2 { border: 1px solid #d7dbe0; background:#fff; color:#111; font-weight: 650; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#f0f2f5; font-size: 12px; color:#333; }
+    .muted { color:#666; font-size: 12px; line-height: 1.5; }
+    .totals { display:flex; gap:10px; flex-wrap: wrap; }
+    .stat { flex:1 1 160px; border:1px solid #eceff3; border-radius: 14px; padding: 12px; cursor: pointer; }
+    .stat:hover { border-color:#d7dbe0; }
+    .stat.active { border: 2px solid #111; }
+    .stat .k { font-size: 12px; color:#666; }
+    .stat .v { font-size: 18px; font-weight: 800; margin-top: 4px; }
+    table { width:100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+    th { font-size: 12px; color:#666; }
+    .right { text-align:right; }
+    .danger { color:#b00020; }
+    .ok { color:#0b6b2a; }
+    .tiny { font-size: 11px; color:#777; }
+    .imgPrev { width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; border:1px solid #e7eaee; display:none; margin-top: 10px; }
+    .divider { height: 1px; background:#eef1f4; margin: 12px 0; }
+
+    /* Language picker overlay */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display:none; align-items: center; justify-content: center; z-index: 9999;
+      padding: 18px;
+    }
+    .overlay .panel {
+      width: min(520px, 100%);
+      background: #fff; border-radius: 18px; padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    }
+    .overlay h2 { margin: 0 0 8px; font-size: 18px; }
+    .langGrid { display:grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
+    .langBtn { padding: 14px; border-radius: 14px; border:1px solid #d7dbe0; background:#fff; text-align:left; }
+    .langBtn strong { display:block; font-size: 16px; }
+    .langBtn span { display:block; margin-top: 4px; color:#666; font-size: 12px; }
+    .headerRow { display:flex; gap:10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+    .tag { font-size: 12px; color:#444; background:#f0f2f5; padding: 6px 10px; border-radius: 999px; }
+  </style>
+</head>
+
+  if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js").catch(()=>{});
+}
+
+<body>
+<header>
+  <div class="headerRow">
+    <h1 id="appTitle">📒 심플 장부</h1>
+    <div class="row" style="margin:0;">
+      <button id="btnChangeLang" class="btn2" type="button" style="width:auto;">Language</button>
+    </div>
+  </div>
+  <div class="tiny" id="filterBar" style="margin-top:8px; display:none;">
+    <span class="tag" id="filterTag"></span>
+    <button id="btnClearFilter" class="btn2" type="button" style="width:auto; margin-left:8px;">필터 해제</button>
+  </div>
+</header>
+
+<!-- Language overlay -->
+<div id="langOverlay" class="overlay">
+  <div class="panel">
+    <h2 id="langTitle">언어 선택</h2>
+    <div class="muted" id="langDesc">원하는 언어를 선택하면 화면 표기가 변경됩니다.</div>
+    <div class="langGrid">
+      <button class="langBtn" data-lang="ko" type="button">
+        <strong>한국어</strong>
+        <span>장부 / 영수증 OCR / 일별 합계</span>
+      </button>
+      <button class="langBtn" data-lang="en" type="button">
+        <strong>English</strong>
+        <span>Ledger / Receipt OCR / Daily totals</span>
+      </button>
+      <button class="langBtn" data-lang="es" type="button">
+        <strong>Español</strong>
+        <span>Libro / OCR de recibo / Totales diarios</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <section class="card">
+    <div class="row">
+      <div class="col">
+        <label id="lblReceipt">영수증 사진 (카메라/앨범)</label>
+        <input id="receiptFile" type="file" accept="image/*" capture="environment" />
+        <img id="preview" class="imgPrev" alt="preview" />
+        <div class="row" style="margin-top:10px;">
+          <div class="col"><button id="btnOCR" class="btn2" type="button">영수증 OCR 실행</button></div>
+          <div class="col"><button id="btnClearOCR" class="btn2" type="button">OCR 결과 지우기</button></div>
+        </div>
+        <p class="muted" id="ocrHint" style="margin:10px 0 0;">
+          • OCR은 브라우저에서 처리됩니다(Tesseract.js).<br/>
+          • 완전 오프라인 OCR은 아래 설정 참고.
+        </p>
+
+        <div class="divider"></div>
+        <div class="row">
+          <div class="col">
+            <label id="lblExtracted">OCR 추출 결과(자동)</label>
+            <div class="tiny" id="extractedBox"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <label id="lblOCRText">OCR 결과 텍스트</label>
+        <textarea id="ocrText" placeholder=""></textarea>
+        <div class="tiny" id="ocrStatus" style="margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <h3 id="hManual" style="margin:0 0 10px;">수입/지출 입력</h3>
+    <div class="row">
+      <div class="col">
+        <label id="lblType">구분</label>
+        <select id="type">
+          <option value="expense">지출</option>
+          <option value="income">수입</option>
+        </select>
+      </div>
+      <div class="col">
+        <label id="lblDate">날짜</label>
+        <input id="date" type="date" />
+      </div>
+      <div class="col">
+        <label id="lblAmount">금액</label>
+        <input id="amount" type="number" inputmode="numeric" placeholder="" />
+      </div>
+      <div class="col">
+        <label id="lblCategory">카테고리</label>
+        <input id="category" type="text" placeholder="" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <div class="col">
+        <label id="lblMemo">메모</label>
+        <input id="memo" type="text" placeholder="" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <div class="col"><button id="btnAdd" class="btn" type="button">저장</button></div>
+      <div class="col"><button id="btnResetForm" class="btn2" type="button">입력칸 초기화</button></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="align-items: center; justify-content: space-between;">
+      <h3 id="hDaily" style="margin:0;">일별 합계</h3>
+      <div class="row">
+        <button id="btnExport" class="btn2" type="button">내보내기(JSON)</button>
+        <button id="btnImport" class="btn2" type="button">가져오기(JSON)</button>
+        <button id="btnWipe" class="btn2 danger" type="button">전체삭제</button>
+      </div>
+    </div>
+    <p class="muted" id="dailyHint" style="margin:10px 0 0;">
+      • “매출(순이익)” = 수입 합계 − 지출 합계<br/>
+      • 날짜 카드를 누르면 그날 내역만 필터됩니다.
+    </p>
+
+    <div class="divider"></div>
+    <div class="totals" id="summary"></div>
+
+    <div class="divider"></div>
+
+    <h3 id="hList" style="margin:0 0 10px;">입력 내역</h3>
+    <div style="overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th id="thDate">날짜</th>
+            <th id="thType">구분</th>
+            <th id="thDesc">카테고리/메모</th>
+            <th id="thAmt" class="right">금액</th>
+            <th id="thDel" class="right">삭제</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3 id="hOfflineOCR" style="margin:0 0 8px;">오프라인 OCR 설정(선택)</h3>
+    <p class="muted" id="offlineOCRText" style="margin:0;">
+      기본 코드는 CDN에서 Tesseract.js를 불러옵니다(첫 로드 시 인터넷 필요).<br/>
+      완전 오프라인 OCR을 원하면 tesseract.min.js / wasm / traineddata를 로컬로 포함하세요.
+    </p>
+  </section>
+
+  <section class="card">
+    <h3 id="hSW" style="margin:0 0 8px;">Service Worker(선택)</h3>
+    <p class="muted" id="swText" style="margin:0;">
+      HTTPS 또는 localhost에서 SW가 잘 동작합니다. sw.js를 추가하면 앱 파일도 오프라인 캐시됩니다.
+    </p>
+  </section>
+</main>
+
+<script>
+(() => {
+  const LS_KEY = "simple-ledger.v2";
+  const LS_LANG = "simple-ledger.lang";
+  const LS_FILTER = "simple-ledger.filterDate";
+
+  /** @type {{id:string,date:string,type:"income"|"expense",amount:number,category:string,memo:string,ocrSnippet?:string,createdAt:number}[]} */
+  let items = [];
+  let filterDate = null; // "YYYY-MM-DD" or null
+
+  // --- i18n dictionary ---
+  const I18N = {
+    ko: {
+      appTitle: "📒 심플 장부 (오프라인 LocalStorage)",
+      language: "언어",
+      pickLangTitle: "언어 선택",
+      pickLangDesc: "원하는 언어를 선택하면 화면 표기가 변경됩니다.",
+      receipt: "영수증 사진 (카메라/앨범)",
+      runOCR: "영수증 OCR 실행",
+      clearOCR: "OCR 결과 지우기",
+      ocrHint: "• OCR은 브라우저에서 처리됩니다(Tesseract.js).\n• 완전 오프라인 OCR은 아래 설정 참고.",
+      extracted: "OCR 추출 결과(자동)",
+      ocrText: "OCR 결과 텍스트",
+      manual: "수입/지출 입력",
+      type: "구분",
+      expense: "지출",
+      income: "수입",
+      date: "날짜",
+      amount: "금액",
+      amountPh: "예: 15000",
+      category: "카테고리",
+      categoryPh: "예: 식비 / 교통 / 매출 등",
+      memo: "메모",
+      memoPh: "예: 상호 / 거래처 / 간단 메모",
+      save: "저장",
+      reset: "입력칸 초기화",
+      daily: "일별 합계",
+      export: "내보내기(JSON)",
+      import: "가져오기(JSON)",
+      wipe: "전체삭제",
+      dailyHint: "• “매출(순이익)” = 수입 합계 − 지출 합계\n• 날짜 카드를 누르면 그날 내역만 필터됩니다.",
+      list: "입력 내역",
+      thDate: "날짜",
+      thType: "구분",
+      thDesc: "카테고리/메모",
+      thAmt: "금액",
+      thDel: "삭제",
+      del: "삭제",
+      net: "매출",
+      incomeSum: "수입",
+      expenseSum: "지출",
+      noData: "아직 데이터가 없습니다. 위에서 수입/지출을 저장해 보세요.",
+      saved: "저장되었습니다.",
+      needPhoto: "먼저 영수증 사진을 선택/촬영해 주세요.",
+      ocrPreparing: "OCR 준비 중...",
+      ocrRunning: "OCR 진행 중... (기기 성능에 따라 5~30초)",
+      ocrDone: "OCR 완료",
+      ocrDoneEmpty: "OCR 완료(텍스트가 거의 없을 수 있음)",
+      ocrFailed: "OCR 실패: ",
+      clearAllConfirm: "정말 전체 데이터를 삭제할까요? (되돌릴 수 없음)",
+      deleteConfirm: "이 항목을 삭제할까요?",
+      exportCopied: "JSON이 클립보드에 복사되었습니다.\n메모장/카톡/드라이브 등에 붙여넣어 백업하세요.",
+      exportDownloaded: "backup 파일을 다운로드했습니다.",
+      importPrompt: "백업 JSON을 붙여넣으세요:",
+      importBad: "형식이 올바르지 않습니다.",
+      importNone: "가져올 데이터가 없습니다.",
+      importConfirm: (n) => `총 ${n}건을 가져오고 기존 데이터에 합칠까요?`,
+      importDone: "가져오기 완료!",
+      filterTag: (d) => `필터: ${d} (해당 날짜만 표시)`,
+      clearFilter: "필터 해제",
+      extractedLabels: { total:"총액", vat:"부가세", merchant:"상호명", date:"날짜" },
+      offlineOCRTitle: "오프라인 OCR 설정(선택)",
+      offlineOCRText: "기본 코드는 CDN에서 Tesseract.js를 불러옵니다(첫 로드 시 인터넷 필요).\n완전 오프라인 OCR을 원하면 tesseract.min.js / wasm / traineddata를 로컬로 포함하세요.",
+      swTitle: "Service Worker(선택)",
+      swText: "HTTPS 또는 localhost에서 SW가 잘 동작합니다. sw.js를 추가하면 앱 파일도 오프라인 캐시됩니다.",
+      ocrSnippet: "OCR",
+    },
+    en: {
+      appTitle: "📒 Simple Ledger (Offline LocalStorage)",
+      language: "Language",
+      pickLangTitle: "Choose language",
+      pickLangDesc: "Pick a language to change all UI labels.",
+      receipt: "Receipt photo (camera / gallery)",
+      runOCR: "Run OCR",
+      clearOCR: "Clear OCR text",
+      ocrHint: "• OCR runs in the browser (Tesseract.js).\n• For fully offline OCR, see the settings below.",
+      extracted: "Extracted from OCR (auto)",
+      ocrText: "OCR text",
+      manual: "Add income / expense",
+      type: "Type",
+      expense: "Expense",
+      income: "Income",
+      date: "Date",
+      amount: "Amount",
+      amountPh: "e.g. 15000",
+      category: "Category",
+      categoryPh: "e.g. food / transport / sales",
+      memo: "Memo",
+      memoPh: "e.g. store / client / note",
+      save: "Save",
+      reset: "Reset form",
+      daily: "Daily totals",
+      export: "Export (JSON)",
+      import: "Import (JSON)",
+      wipe: "Delete all",
+      dailyHint: "• “Net sales” = income − expense\n• Tap a date card to filter the list.",
+      list: "Entries",
+      thDate: "Date",
+      thType: "Type",
+      thDesc: "Category / memo",
+      thAmt: "Amount",
+      thDel: "Delete",
+      del: "Delete",
+      net: "Net",
+      incomeSum: "Income",
+      expenseSum: "Expense",
+      noData: "No data yet. Save an entry above.",
+      saved: "Saved.",
+      needPhoto: "Please select/capture a receipt photo first.",
+      ocrPreparing: "Preparing OCR...",
+      ocrRunning: "Running OCR... (5–30s depending on device)",
+      ocrDone: "OCR done",
+      ocrDoneEmpty: "OCR done (text may be empty)",
+      ocrFailed: "OCR failed: ",
+      clearAllConfirm: "Delete ALL data? (Cannot undo)",
+      deleteConfirm: "Delete this entry?",
+      exportCopied: "Backup JSON copied to clipboard.",
+      exportDownloaded: "Backup file downloaded.",
+      importPrompt: "Paste your backup JSON:",
+      importBad: "Invalid format.",
+      importNone: "No items to import.",
+      importConfirm: (n) => `Import ${n} items and merge with existing data?`,
+      importDone: "Import complete!",
+      filterTag: (d) => `Filter: ${d} (show only this date)`,
+      clearFilter: "Clear filter",
+      extractedLabels: { total:"Total", vat:"VAT/Tax", merchant:"Merchant", date:"Date" },
+      offlineOCRTitle: "Offline OCR (optional)",
+      offlineOCRText: "This app loads Tesseract.js from a CDN (internet needed once).\nFor fully offline OCR, bundle tesseract.min.js / wasm / traineddata locally.",
+      swTitle: "Service Worker (optional)",
+      swText: "SW works best on HTTPS or localhost. Add sw.js to cache the app for offline use.",
+      ocrSnippet: "OCR",
+    },
+    es: {
+      appTitle: "📒 Libro de caja (Offline LocalStorage)",
+      language: "Idioma",
+      pickLangTitle: "Elegir idioma",
+      pickLangDesc: "Elige un idioma para cambiar las etiquetas.",
+      receipt: "Foto del recibo (cámara / galería)",
+      runOCR: "Ejecutar OCR",
+      clearOCR: "Borrar texto OCR",
+      ocrHint: "• El OCR se ejecuta en el navegador (Tesseract.js).\n• Para OCR totalmente offline, mira la configuración abajo.",
+      extracted: "Extraído del OCR (auto)",
+      ocrText: "Texto OCR",
+      manual: "Ingresar ingreso / gasto",
+      type: "Tipo",
+      expense: "Gasto",
+      income: "Ingreso",
+      date: "Fecha",
+      amount: "Monto",
+      amountPh: "ej: 15000",
+      category: "Categoría",
+      categoryPh: "ej: comida / transporte / ventas",
+      memo: "Nota",
+      memoPh: "ej: tienda / cliente / nota",
+      save: "Guardar",
+      reset: "Reiniciar",
+      daily: "Totales diarios",
+      export: "Exportar (JSON)",
+      import: "Importar (JSON)",
+      wipe: "Borrar todo",
+      dailyHint: "• “Neto” = ingreso − gasto\n• Toca una fecha para filtrar la lista.",
+      list: "Registros",
+      thDate: "Fecha",
+      thType: "Tipo",
+      thDesc: "Categoría / nota",
+      thAmt: "Monto",
+      thDel: "Borrar",
+      del: "Borrar",
+      net: "Neto",
+      incomeSum: "Ingreso",
+      expenseSum: "Gasto",
+      noData: "Aún no hay datos. Guarda un registro arriba.",
+      saved: "Guardado.",
+      needPhoto: "Selecciona/toma una foto del recibo primero.",
+      ocrPreparing: "Preparando OCR...",
+      ocrRunning: "Procesando OCR... (5–30s según el dispositivo)",
+      ocrDone: "OCR listo",
+      ocrDoneEmpty: "OCR listo (puede estar vacío)",
+      ocrFailed: "Fallo OCR: ",
+      clearAllConfirm: "¿Borrar TODOS los datos? (No se puede deshacer)",
+      deleteConfirm: "¿Borrar este registro?",
+      exportCopied: "JSON copiado al portapapeles.",
+      exportDownloaded: "Archivo de respaldo descargado.",
+      importPrompt: "Pega tu JSON de respaldo:",
+      importBad: "Formato inválido.",
+      importNone: "No hay elementos para importar.",
+      importConfirm: (n) => `¿Importar ${n} elementos y mezclar con los existentes?`,
+      importDone: "¡Importación completa!",
+      filterTag: (d) => `Filtro: ${d} (solo esta fecha)`,
+      clearFilter: "Quitar filtro",
+      extractedLabels: { total:"Total", vat:"Impuesto/IVA", merchant:"Comercio", date:"Fecha" },
+      offlineOCRTitle: "OCR offline (opcional)",
+      offlineOCRText: "La app carga Tesseract.js desde CDN (internet una vez).\nPara OCR totalmente offline, incluye tesseract.min.js / wasm / traineddata localmente.",
+      swTitle: "Service Worker (opcional)",
+      swText: "SW funciona mejor en HTTPS o localhost. Añade sw.js para cache offline.",
+      ocrSnippet: "OCR",
+    }
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  const langOverlay = $("langOverlay");
+  const btnChangeLang = $("btnChangeLang");
+
+  const receiptFile = $("receiptFile");
+  const preview = $("preview");
+  const btnOCR = $("btnOCR");
+  const btnClearOCR = $("btnClearOCR");
+  const ocrText = $("ocrText");
+  const ocrStatus = $("ocrStatus");
+
+  const extractedBox = $("extractedBox");
+
+  const type = $("type");
+  const date = $("date");
+  const amount = $("amount");
+  const category = $("category");
+  const memo = $("memo");
+
+  const btnAdd = $("btnAdd");
+  const btnResetForm = $("btnResetForm");
+
+  const summary = $("summary");
+  const rows = $("rows");
+
+  const btnExport = $("btnExport");
+  const btnImport = $("btnImport");
+  const btnWipe = $("btnWipe");
+
+  const filterBar = $("filterBar");
+  const filterTag = $("filterTag");
+  const btnClearFilter = $("btnClearFilter");
+
+  let lang = localStorage.getItem(LS_LANG) || "";
+
+  function t() {
+    return I18N[lang] || I18N.ko;
+  }
+
+  function applyLang() {
+    const L = t();
+
+    document.title = L.appTitle;
+    $("appTitle").textContent = L.appTitle;
+    btnChangeLang.textContent = L.language;
+
+    $("langTitle").textContent = L.pickLangTitle;
+    $("langDesc").textContent = L.pickLangDesc;
+
+    $("lblReceipt").textContent = L.receipt;
+    btnOCR.textContent = L.runOCR;
+    btnClearOCR.textContent = L.clearOCR;
+    $("ocrHint").innerHTML = L.ocrHint.replaceAll("\n", "<br/>");
+
+    $("lblExtracted").textContent = L.extracted;
+    $("lblOCRText").textContent = L.ocrText;
+
+    $("hManual").textContent = L.manual;
+    $("lblType").textContent = L.type;
+    type.querySelector('option[value="expense"]').textContent = L.expense;
+    type.querySelector('option[value="income"]').textContent = L.income;
+
+    $("lblDate").textContent = L.date;
+    $("lblAmount").textContent = L.amount;
+    amount.placeholder = L.amountPh;
+    $("lblCategory").textContent = L.category;
+    category.placeholder = L.categoryPh;
+    $("lblMemo").textContent = L.memo;
+    memo.placeholder = L.memoPh;
+
+    btnAdd.textContent = L.save;
+    btnResetForm.textContent = L.reset;
+
+    $("hDaily").textContent = L.daily;
+    btnExport.textContent = L.export;
+    btnImport.textContent = L.import;
+    btnWipe.textContent = L.wipe;
+
+    $("dailyHint").innerHTML = L.dailyHint.replaceAll("\n", "<br/>");
+
+    $("hList").textContent = L.list;
+    $("thDate").textContent = L.thDate;
+    $("thType").textContent = L.thType;
+    $("thDesc").textContent = L.thDesc;
+    $("thAmt").textContent = L.thAmt;
+    $("thDel").textContent = L.thDel;
+
+    $("hOfflineOCR").textContent = L.offlineOCRTitle;
+    $("offlineOCRText").innerHTML = L.offlineOCRText.replaceAll("\n", "<br/>");
+    $("hSW").textContent = L.swTitle;
+    $("swText").textContent = L.swText;
+
+    btnClearFilter.textContent = L.clearFilter;
+    renderFilterBar();
+    renderExtracted(null);
+  }
+
+  function showLangPicker(force=false) {
+    if (!lang || force) {
+      langOverlay.style.display = "flex";
+    }
+  }
+
+  langOverlay.addEventListener("click", (e) => {
+    if (e.target === langOverlay) return; // don't close on backdrop tap (intentional)
+  });
+
+  langOverlay.querySelectorAll(".langBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      lang = btn.dataset.lang;
+      localStorage.setItem(LS_LANG, lang);
+      langOverlay.style.display = "none";
+      applyLang();
+      render();
+    });
+  });
+
+  btnChangeLang.addEventListener("click", () => {
+    langOverlay.style.display = "flex";
+  });
+
+  // --- helpers ---
+  function todayStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  function fmt(n) { return (Number(n) || 0).toLocaleString(lang === "en" ? "en-US" : (lang === "es" ? "es-ES" : "ko-KR")); }
+  function uid() {
+    return crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  }
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      items = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(items)) items = [];
+    } catch { items = []; }
+
+    filterDate = localStorage.getItem(LS_FILTER) || null;
+  }
+  function save() { localStorage.setItem(LS_KEY, JSON.stringify(items)); }
+  function saveFilter() {
+    if (filterDate) localStorage.setItem(LS_FILTER, filterDate);
+    else localStorage.removeItem(LS_FILTER);
+  }
+
+  function renderFilterBar() {
+    if (filterDate) {
+      filterBar.style.display = "block";
+      filterTag.textContent = t().filterTag(filterDate);
+    } else {
+      filterBar.style.display = "none";
+      filterTag.textContent = "";
+    }
+  }
+
+  // --- image preview ---
+  receiptFile.addEventListener("change", () => {
+    const f = receiptFile.files?.[0];
+    if (!f) {
+      preview.style.display = "none";
+      preview.src = "";
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    preview.src = url;
+    preview.style.display = "block";
+  });
+
+  // --- OCR (Tesseract.js) ---
+  let TesseractRef = null;
+  async function loadTesseract() {
+    if (TesseractRef) return TesseractRef;
+
+    // 기본: CDN (최초 1회 인터넷 필요)
+    // 완전 오프라인 OCR 원하면:
+    // const src = "./tesseract.min.js";
+    const src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Tesseract.js load failed (check internet/path)"));
+      document.head.appendChild(s);
+    });
+
+    TesseractRef = window.Tesseract;
+    if (!TesseractRef) throw new Error("Tesseract not found.");
+    return TesseractRef;
+  }
+  function setOCRStatus(msg) { ocrStatus.textContent = msg; }
+
+  btnClearOCR.addEventListener("click", () => {
+    ocrText.value = "";
+    setOCRStatus("");
+    renderExtracted(null);
+  });
+
+  // --------- OCR parsing rules (total / vat / merchant / date) ----------
+  function normalizeOCR(text) {
+    const s = String(text || "");
+    // common OCR confusions
+    return s
+      .replace(/\r/g, "\n")
+      .replace(/[’‘]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/[₩]/g, "W")
+      .replace(/[€]/g, "EUR")
+      .replace(/[•·]/g, ".")
+      .replace(/[Oo](?=\d)/g, "0")
+      .replace(/(?<=\d)[Oo]/g, "0");
+  }
+
+  function parseDateFromText(text) {
+    const s = normalizeOCR(text);
+
+    // 1) YYYY-MM-DD / YYYY.MM.DD / YYYY/MM/DD
+    let m = s.match(/\b(20\d{2})[.\-\/](\d{1,2})[.\-\/](\d{1,2})\b/);
+    if (m) return toISODate(m[1], m[2], m[3]);
+
+    // 2) DD/MM/YYYY or DD-MM-YYYY (common in ES)
+    m = s.match(/\b(\d{1,2})[.\-\/](\d{1,2})[.\-\/](20\d{2})\b/);
+    if (m) return toISODate(m[3], m[2], m[1]);
+
+    // 3) "2025년 12월 15일"
+    m = s.match(/\b(20\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일\b/);
+    if (m) return toISODate(m[1], m[2], m[3]);
+
+    // 4) fallback: not found
+    return null;
+
+    function toISODate(y, mo, d) {
+      const mm = String(mo).padStart(2, "0");
+      const dd = String(d).padStart(2, "0");
+      return `${y}-${mm}-${dd}`;
+    }
+  }
+
+  function parseMoneyCandidates(text) {
+    // Returns array of numeric candidates with context line
+    const lines = normalizeOCR(text).split("\n").map(x => x.trim()).filter(Boolean);
+    const out = [];
+    for (const line of lines) {
+      // match numbers like 12,345 or 12345 or 12.345 (some locales)
+      const matches = [...line.matchAll(/(\d{1,3}(?:[,\s]\d{3})+|\d{4,}|\d{1,3}(?:\.\d{3})+)/g)];
+      for (const mm of matches) {
+        const raw = mm[1];
+        const cleaned = raw.replaceAll(/[,\s.]/g, "");
+        const n = Number(cleaned);
+        if (Number.isFinite(n) && n > 0) out.push({ n, line });
+      }
+    }
+    return out;
+  }
+
+  function scoreLineForTotal(line) {
+    const L = line.toLowerCase();
+    const keywords = [
+      "total","amount","grand","sum","balance","paid","payment",
+      "합계","총액","총 계","총금액","결제","결 제","받을금액","받 을 금액","카드","현금",
+      "importe","total","pagar","pagado","monto","saldo"
+    ];
+    return keywords.some(k => L.includes(k)) ? 3 : 0;
+  }
+
+  function scoreLineForVAT(line) {
+    const L = line.toLowerCase();
+    const keywords = [
+      "vat","tax","gst","iva","igv","itbms",
+      "부가세","부가 가치","세금","과세","면세","taxable","impuesto"
+    ];
+    return keywords.some(k => L.includes(k)) ? 3 : 0;
+  }
+
+  function parseTotalAndVAT(text) {
+    const cands = parseMoneyCandidates(text);
+    if (!cands.length) return { total:null, vat:null };
+
+    // Prefer candidates from lines with keywords, otherwise max value
+    const scored = cands.map(c => ({
+      ...c,
+      totalScore: scoreLineForTotal(c.line),
+      vatScore: scoreLineForVAT(c.line)
+    }));
+
+    // VAT: pick highest vatScore then value not too huge
+    const vatCand = scored
+      .filter(x => x.vatScore > 0)
+      .sort((a,b) => (b.vatScore - a.vatScore) || (b.n - a.n))[0] || null;
+
+    // TOTAL: pick highest totalScore; if tie, larger number
+    let totalCand = scored
+      .sort((a,b) => (b.totalScore - a.totalScore) || (b.n - a.n))[0] || null;
+
+    // If the "total" line matched but number seems smaller than another obvious total, guard:
+    // choose maximum number if no total keywords anywhere
+    const hasTotalKeyword = scored.some(x => x.totalScore > 0);
+    if (!hasTotalKeyword) {
+      totalCand = scored.sort((a,b) => b.n - a.n)[0];
+    }
+
+    // If VAT > TOTAL (OCR mistake), drop VAT
+    const total = totalCand ? totalCand.n : null;
+    let vat = vatCand ? vatCand.n : null;
+    if (vat && total && vat > total) vat = null;
+
+    // If VAT missing but "total" and another number near total*0.1 exists, try estimate (weak heuristic)
+    if (!vat && total) {
+      const approx = scored
+        .filter(x => x.n < total && x.n > total * 0.03 && x.n < total * 0.25)
+        .sort((a,b) => Math.abs(a.n - total*0.1) - Math.abs(b.n - total*0.1))[0];
+      if (approx && scoreLineForVAT(approx.line) > 0) vat = approx.n;
+    }
+
+    return { total, vat };
+  }
+
+  function parseMerchant(text) {
+    const lines = normalizeOCR(text).split("\n").map(x => x.trim()).filter(Boolean);
+    if (!lines.length) return null;
+
+    // Filter out junk lines (numbers-only, very short, headers)
+    const bad = (s) => {
+      const L = s.toLowerCase();
+      if (s.length < 3) return true;
+      if (/^[\d\W_]+$/.test(s)) return true;
+      if (L.includes("tel") || L.includes("phone") || L.includes("fax")) return true;
+      if (L.includes("www") || L.includes("http")) return true;
+      if (L.includes("invoice") || L.includes("receipt") || L.includes("factura") || L.includes("boleta")) return true;
+      if (L.includes("date") || L.includes("fecha")) return true;
+      return false;
+    };
+
+    // Heuristic: merchant is often top 1-3 lines, with letters
+    const top = lines.slice(0, Math.min(6, lines.length)).filter(s => !bad(s));
+    if (!top.length) return null;
+
+    // Prefer line with most letters and fewest digits
+    const scored = top.map(s => {
+      const letters = (s.match(/[A-Za-z가-힣ñÑáéíóúÁÉÍÓÚ]/g) || []).length;
+      const digits = (s.match(/\d/g) || []).length;
+      const score = letters*2 - digits;
+      return { s, score };
+    }).sort((a,b) => b.score - a.score);
+
+    return scored[0]?.s || null;
+  }
+
+  function renderExtracted(ex) {
+    const L = t();
+    if (!ex) {
+      extractedBox.innerHTML = `<span class="muted">${escapeHtml(L.extracted)}: -</span>`;
+      return;
+    }
+    const parts = [];
+    if (ex.merchant) parts.push(`<b>${escapeHtml(L.extractedLabels.merchant)}:</b> ${escapeHtml(ex.merchant)}`);
+    if (ex.date) parts.push(`<b>${escapeHtml(L.extractedLabels.date)}:</b> ${escapeHtml(ex.date)}`);
+    if (ex.total) parts.push(`<b>${escapeHtml(L.extractedLabels.total)}:</b> ${fmt(ex.total)}`);
+    if (ex.vat) parts.push(`<b>${escapeHtml(L.extractedLabels.vat)}:</b> ${fmt(ex.vat)}`);
+    extractedBox.innerHTML = parts.length ? parts.join("<br/>") : `<span class="muted">-</span>`;
+  }
+
+  function extractFromOCR(text) {
+    const normalized = normalizeOCR(text);
+    const ocrDate = parseDateFromText(normalized);
+    const { total, vat } = parseTotalAndVAT(normalized);
+    const merchant = parseMerchant(normalized);
+    return { date: ocrDate, total, vat, merchant };
+  }
+
+  btnOCR.addEventListener("click", async () => {
+    const f = receiptFile.files?.[0];
+    if (!f) return alert(t().needPhoto);
+
+    btnOCR.disabled = true;
+    setOCRStatus(t().ocrPreparing);
+
+    try {
+      const T = await loadTesseract();
+
+      setOCRStatus(t().ocrRunning);
+
+      const result = await T.recognize(f, "kor+eng+spa", {
+        logger: m => {
+          if (m?.status && typeof m?.progress === "number") {
+            setOCRStatus(`${m.status} ${(m.progress*100).toFixed(0)}%`);
+          }
+        }
+      });
+
+      const text = (result?.data?.text || "").trim();
+      ocrText.value = text;
+      setOCRStatus(text ? t().ocrDone : t().ocrDoneEmpty);
+
+      // Extract structured fields
+      const ex = extractFromOCR(text);
+      renderExtracted(ex);
+
+      // Auto-apply to form (best effort)
+      // date: set date if empty
+      if (ex.date && !date.value) date.value = ex.date;
+
+      // amount: if empty, set to total
+      if (ex.total && !amount.value) amount.value = String(ex.total);
+
+      // memo: if empty, put merchant
+      if (ex.merchant && !memo.value) memo.value = ex.merchant;
+
+      // If merchant exists and category empty, keep category empty (user decides)
+      // Optionally, add VAT info into memo if present
+      if (ex.vat && memo.value && !memo.value.includes("VAT") && !memo.value.includes("부가세") && !memo.value.toLowerCase().includes("iva")) {
+        memo.value = `${memo.value} / ${t().extractedLabels.vat}: ${fmt(ex.vat)}`;
+      }
+
+    } catch (e) {
+      console.error(e);
+      alert(t().ocrFailed + (e?.message || e));
+      setOCRStatus(t().ocrFailed);
+    } finally {
+      btnOCR.disabled = false;
+    }
+  });
+
+  // --- ledger / render ---
+  function render() {
+    renderFilterBar();
+
+    // sort: date desc then createdAt desc
+    const sorted = [...items].sort((a,b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
+
+    const visible = filterDate ? sorted.filter(it => it.date === filterDate) : sorted;
+
+    // entries table
+    rows.innerHTML = visible.map(it => {
+      const sign = it.type === "income" ? "+" : "-";
+      const cls = it.type === "income" ? "ok" : "danger";
+      const catMemo = [it.category, it.memo].filter(Boolean).join(" / ");
+      return `
+        <tr>
+          <td>${it.date}</td>
+          <td class="${cls}"><b>${it.type === "income" ? t().income : t().expense}</b></td>
+          <td>
+            ${escapeHtml(catMemo || "-")}
+            ${it.ocrSnippet ? `<div class="tiny">${escapeHtml(t().ocrSnippet)}: ${escapeHtml(it.ocrSnippet)}</div>` : ""}
+          </td>
+          <td class="right ${cls}"><b>${sign}${fmt(it.amount)}</b></td>
+          <td class="right">
+            <button class="btn2 danger" data-del="${it.id}" type="button">${escapeHtml(t().del)}</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    // daily totals (always computed from ALL items, not filtered)
+    const byDate = new Map();
+    for (const it of items) {
+      const cur = byDate.get(it.date) || { income: 0, expense: 0 };
+      if (it.type === "income") cur.income += Number(it.amount)||0;
+      else cur.expense += Number(it.amount)||0;
+      byDate.set(it.date, cur);
+    }
+    const dates = [...byDate.keys()].sort((a,b) => a < b ? 1 : -1);
+
+    summary.innerHTML = dates.map(d => {
+      const v = byDate.get(d);
+      const net = v.income - v.expense;
+      const active = filterDate === d ? "active" : "";
+      return `
+        <div class="stat ${active}" data-day="${d}">
+          <div class="k">${d}</div>
+          <div class="v">${fmt(net)} <span class="tiny">(${escapeHtml(t().net)})</span></div>
+          <div class="tiny">${escapeHtml(t().incomeSum)} ${fmt(v.income)} / ${escapeHtml(t().expenseSum)} ${fmt(v.expense)}</div>
+        </div>
+      `;
+    }).join("") || `<div class="muted">${escapeHtml(t().noData)}</div>`;
+  }
+
+  // click daily card -> filter
+  summary.addEventListener("click", (e) => {
+    const card = e.target.closest(".stat[data-day]");
+    if (!card) return;
+    const day = card.getAttribute("data-day");
+    filterDate = (filterDate === day) ? null : day;
+    saveFilter();
+    render();
+  });
+
+  btnClearFilter.addEventListener("click", () => {
+    filterDate = null;
+    saveFilter();
+    render();
+  });
+
+  // delete entry
+  rows.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-del]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-del");
+    if (!confirm(t().deleteConfirm)) return;
+    items = items.filter(x => x.id !== id);
+    save();
+    render();
+  });
+
+  // add entry
+  btnAdd.addEventListener("click", () => {
+    const d = date.value || todayStr();
+    const tt = type.value;
+    const a = Number(amount.value);
+
+    if (!d) return alert(t().date);
+    if (!Number.isFinite(a) || a <= 0) return alert(t().amount);
+
+    const it = {
+      id: uid(),
+      date: d,
+      type: tt === "income" ? "income" : "expense",
+      amount: a,
+      category: (category.value || "").trim(),
+      memo: (memo.value || "").trim(),
+      ocrSnippet: (ocrText.value || "").trim().slice(0, 80) || undefined,
+      createdAt: Date.now()
+    };
+
+    items.push(it);
+    save();
+    render();
+
+    // keep date, clear others
+    amount.value = "";
+    category.value = "";
+    memo.value = "";
+    alert(t().saved);
+  });
+
+  btnResetForm.addEventListener("click", () => {
+    type.value = "expense";
+    date.value = todayStr();
+    amount.value = "";
+    category.value = "";
+    memo.value = "";
+  });
+
+  // export/import/wipe
+  btnExport.addEventListener("click", async () => {
+    const data = JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), lang, filterDate, items }, null, 2);
+    try {
+      await navigator.clipboard.writeText(data);
+      alert(t().exportCopied);
+    } catch {
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ledger-backup.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      alert(t().exportDownloaded);
+    }
+  });
+
+  btnImport.addEventListener("click", async () => {
+    const raw = prompt(t().importPrompt);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      const next = Array.isArray(parsed) ? parsed : parsed.items;
+      if (!Array.isArray(next)) throw new Error(t().importBad);
+
+      const cleaned = next
+        .filter(x => x && typeof x === "object")
+        .map(x => ({
+          id: x.id || uid(),
+          date: x.date || todayStr(),
+          type: x.type === "income" ? "income" : "expense",
+          amount: Number(x.amount) || 0,
+          category: (x.category || "").trim(),
+          memo: (x.memo || "").trim(),
+          ocrSnippet: x.ocrSnippet ? String(x.ocrSnippet).slice(0,80) : undefined,
+          createdAt: Number(x.createdAt) || Date.now()
+        }))
+        .filter(x => x.amount > 0);
+
+      if (!cleaned.length) throw new Error(t().importNone);
+      if (!confirm(t().importConfirm(cleaned.length))) return;
+
+      items = items.concat(cleaned);
+      save();
+      render();
+      alert(t().importDone);
+    } catch (e) {
+      alert((e?.message || e));
+    }
+  });
+
+  btnWipe.addEventListener("click", () => {
+    if (!confirm(t().clearAllConfirm)) return;
+    items = [];
+    save();
+    filterDate = null;
+    saveFilter();
+    render();
+  });
+
+  // init
+  date.value = todayStr();
+  load();
+
+  // If user hasn't chosen language, show picker first
+  if (!lang) {
+    lang = "ko"; // default for internal initial render; user can choose
+    applyLang();
+    showLangPicker(true);
+  } else {
+    applyLang();
+  }
+
+  render();
+})();
+</script>
+
+</body>
+</html>
